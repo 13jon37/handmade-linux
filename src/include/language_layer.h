@@ -10,6 +10,10 @@
 
 #include <sys/mman.h>
 
+#ifndef MAP_ANONYMOUS
+#define MAP_ANONYMOUS MAP_ANON
+#endif
+
 #define internal        static
 #define local_persist   static
 #define global_variable static

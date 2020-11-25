@@ -1,84 +1,62 @@
 #include <SDL2/SDL.h>
 
 #include "include/language_layer.h"
+#include "include/sdl_buffer.h"
 
-//#include "simulate_game.c"
+#include "simulate_game.c"
 
-#ifndef MAP_ANONYMOUS
-#define MAP_ANONYMOUS MAP_ANON
-#endif
-
-global_variable SDL_Texture* texture;
-global_variable void* bitmap_memory; // backbuffer
-global_variable int bitmap_width;
-global_variable int bitmap_height;
-global_variable int bytes_per_pixel = 4;
-
-#define RED_OFFSET 2
-#define GREEN_OFFSET 1
-#define BLUE_OFFSET 0
-
-internal void
-draw_filled_rect(v4 color, v2 position, v2 size)
+internal sdl_window_dimension
+sdl_get_window_dimension(SDL_Window* window)
 {
-    i32 lower_bound_x = (i32)position.x;
-    i32 lower_bound_y = (i32)position.y;
-    i32 upper_bound_x = lower_bound_x + (i32)size.x;
-    i32 upper_bound_y = lower_bound_y + (i32)size.y;
-    i32 pixel_index = 0;
+    sdl_window_dimension result;
     
-    u8* row = (u8*)bitmap_memory;
+    SDL_GetWindowSize(window, &result.width, &result.height);
     
-    for (i32 y = lower_bound_y; y <= upper_bound_y; ++y)
-    {
-        for (i32 x = lower_bound_x; x <= upper_bound_x; ++x)
-        {
-            pixel_index = y * bitmap_width + x;
-            
-            row[pixel_index * bytes_per_pixel +  RED_OFFSET] =   (u8)(color.r * 255.f);
-            row[pixel_index * bytes_per_pixel +  GREEN_OFFSET] = (u8)(color.g * 255.f);
-            row[pixel_index * bytes_per_pixel +  BLUE_OFFSET] =  (u8)(color.b * 255.f);
-        }
-    }
+    return result;
 }
 
 internal void
-SDL_resize_texture(SDL_Renderer* renderer, int width, int height)
+SDL_resize_texture(sdl_offscreen_buffer* buffer, 
+                   SDL_Renderer* renderer, 
+                   int width, int height)
 {
-    if (bitmap_memory)
+    buffer->bytes_per_pixel = 4;
+    
+    if (buffer->memory)
     {
-        munmap(bitmap_memory, bitmap_width * bitmap_height * bytes_per_pixel);
+        munmap(buffer->memory, buffer->width * buffer->height * buffer->bytes_per_pixel);
     }
     
-    if (bitmap_width)
+    if (buffer->width)
     {
-        SDL_DestroyTexture(texture);
+        SDL_DestroyTexture(buffer->texture);
     }
     
-    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
-                                SDL_TEXTUREACCESS_STREAMING,
-                                width,
-                                height);
+    buffer->texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
+                                        SDL_TEXTUREACCESS_STREAMING,
+                                        width,
+                                        height);
     
-    bitmap_width = width; // save copy of global_variable to calculate pitch
-    bitmap_height = height;
+    buffer->width = width; // save copy of global_variable to calculate pitch
+    buffer->height = height;
     
     // mmap is == to virtualalloc and mapviewoffile on windows
     
-    bitmap_memory = mmap(0,
-                         width * height * bytes_per_pixel,
-                         PROT_READ | PROT_WRITE,
-                         MAP_PRIVATE | MAP_ANONYMOUS,
-                         -1,
-                         0);
+    buffer->memory = mmap(0,
+                          width * height * buffer->bytes_per_pixel,
+                          PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE | MAP_ANONYMOUS,
+                          -1,
+                          0);
 }
 
 internal void
-SDL_update_window(SDL_Window* window, SDL_Renderer* renderer)
+SDL_update_window(sdl_offscreen_buffer* buffer, 
+                  SDL_Window* window, SDL_Renderer* renderer)
 {
-    SDL_UpdateTexture(texture, 0, bitmap_memory, bitmap_width * 4);
+    SDL_UpdateTexture(buffer->texture, 0, buffer->memory, buffer->width * 4);
     
-    SDL_RenderCopy(renderer, texture, 0, 0);
+    SDL_RenderCopy(renderer, buffer->texture, 0, 0);
     
     SDL_RenderPresent(renderer);
 }
@@ -104,14 +82,14 @@ bool handle_event(SDL_Event* event)
                     SDL_Window* window = SDL_GetWindowFromID(event->window.windowID);
                     SDL_Renderer* renderer = SDL_GetRenderer(window);
                     printf("SDL_WINDOWEVENT_SIZE_CHANGED (%d, %d)\n", event->window.data1, event->window.data2);
-                    SDL_resize_texture(renderer, event->window.data1, event->window.data2);
+                    SDL_resize_texture(&global_back_buffer, renderer, event->window.data1, event->window.data2);
                 } break;
                 
                 case SDL_WINDOWEVENT_EXPOSED: 
                 {
                     SDL_Window* window = SDL_GetWindowFromID(event->window.windowID);
                     SDL_Renderer* renderer = SDL_GetRenderer(window);
-                    SDL_update_window(window, renderer);
+                    SDL_update_window(&global_back_buffer, window, renderer);
                 } break;
                 
             } break;
@@ -143,10 +121,8 @@ int main(int argc, char* argv[])
         if (renderer)
         {
             bool running = true;
-            int width, height;
-            
-            SDL_GetWindowSize(window, &width, &height);
-            SDL_resize_texture(renderer, width, height);
+            sdl_window_dimension dimension = sdl_get_window_dimension(window);
+            SDL_resize_texture(&global_back_buffer, renderer, dimension.width, dimension.height);
             
             while(running)
             {
@@ -159,9 +135,9 @@ int main(int argc, char* argv[])
                     }
                 }
                 
-                SDL_update_window(window, renderer);
+                SDL_update_window(&global_back_buffer, window, renderer);
                 
-                draw_filled_rect(v4(1, 0, 0, 1), v2(32, 32), v2(64, 64));
+                draw_filled_rect(&global_back_buffer, v4(1, 0, 0, 1), v2(32, 32), v2(64, 64));
             }
         }
         else

@@ -1,2 +1,2 @@
-# 4coder_linux_template
 # handmade-linux
+# CREDIT: https://davidgow.net/handmadepenguin/
