@@ -2,38 +2,46 @@
 
 #include "include/language_layer.h"
 
+//#include "simulate_game.c"
+
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 
 global_variable SDL_Texture* texture;
-global_variable void* bitmap_memory;
+global_variable void* bitmap_memory; // backbuffer
 global_variable int bitmap_width;
 global_variable int bitmap_height;
 global_variable int bytes_per_pixel = 4;
 
+#define RED_OFFSET 2
+#define GREEN_OFFSET 1
+#define BLUE_OFFSET 0
+
 internal void
-render_weird_gradient(int blue_offset, int green_offset)
+draw_filled_rect(v4 color, v2 position, v2 size)
 {
-    int width = bitmap_width;
-    int height = bitmap_height;
+    // Credit = Ryan Feury 
+    // A great help
     
-    int pitch = width * bytes_per_pixel;
+    i32 lower_bound_x = (i32)position.x;
+    i32 lower_bound_y = (i32)position.y;
+    i32 upper_bound_x = lower_bound_x + (i32)size.x;
+    i32 upper_bound_y = lower_bound_y + (i32)size.y;
+    i32 pixel_index = 0;
+    
     u8* row = (u8*)bitmap_memory;
     
-    for (int y = 0; y < bitmap_height; ++y)
+    for (i32 y = lower_bound_y; y <= upper_bound_y; ++y)
     {
-        u32* pixel = (u32*)row;
-        
-        for (int x = 0; x < bitmap_width; ++x)
+        for (i32 x = lower_bound_x; x <= upper_bound_x; ++x)
         {
-            u8 blue = (x + blue_offset);
-            u8 green = (y + green_offset);
+            pixel_index = y * bitmap_width + x;
             
-            *pixel++ = ((green << 8) | blue);
+            row[pixel_index * bytes_per_pixel +  RED_OFFSET] =   (u8)(color.r * 255.f);
+            row[pixel_index * bytes_per_pixel +  GREEN_OFFSET] = (u8)(color.g * 255.f);
+            row[pixel_index * bytes_per_pixel +  BLUE_OFFSET] =  (u8)(color.b * 255.f);
         }
-        
-        row += pitch;
     }
 }
 
@@ -139,10 +147,9 @@ int main(int argc, char* argv[])
         {
             bool running = true;
             int width, height;
+            
             SDL_GetWindowSize(window, &width, &height);
             SDL_resize_texture(renderer, width, height);
-            int xoffset = 0;
-            int yoffset = 0;
             
             while(running)
             {
@@ -155,10 +162,9 @@ int main(int argc, char* argv[])
                     }
                 }
                 
-                //render_weird_gradient(xoffset, yoffset);
                 SDL_update_window(window, renderer);
-                //++xoffset;
-                //yoffset += 2;
+                
+                draw_filled_rect(v4(1, 0, 0, 1), v2(32, 32), v2(64, 64));
             }
         }
         else

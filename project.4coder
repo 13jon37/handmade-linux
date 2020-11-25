@@ -1,6 +1,6 @@
 version(1);
 
-project_name = "4coder_proj_template";
+project_name = "handmade_linux";
 
 patterns = {
 	"*.c",
